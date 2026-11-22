@@ -1,0 +1,19 @@
+services:
+  hemovida-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    image: hemovida-gateway:latest
+
+    container_name: hemovida-gateway
+
+    ports:
+      - "7501:7501"
+
+    env_file:
+      - .env
+
+    environment:
+      NODE_ENV: production
+      PORT: "7501"

@@ -1,0 +1,148 @@
+pipeline {
+    agent any
+
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        timestamps()
+    }
+
+    environment {
+        APP_NAME = 'hemovida-gateway'
+    }
+
+    stages {
+
+        stage('Checkout GitHub') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/biafraga/Gateway_20262M_prj5_hemovida'
+                    ]]
+                ])
+            }
+        }
+
+        stage('Fetch Secrets - Infisical') {
+            steps {
+                withCredentials([
+                    string(
+                        credentialsId: 'tokenbeatrizhemovida',
+                        variable: 'INFISICAL_TOKEN'
+                    )
+                ]) {
+                        sh '''
+                            set +x
+                            set -eu
+                            umask 077
+                            rm -f .env
+
+                            npx -y @infisical/cli export \
+                                --env="dev" \
+                                --path="/hemovida" \
+                                --token="$INFISICAL_TOKEN" \
+                                > .env
+
+                            test -s .env || { echo "ERRO: .env vazio."; exit 1; }
+
+                            echo "Variáveis carregadas:"
+                            cut -d= -f1 .env
+                        '''
+                }
+            }
+        }
+
+        stage('Validar Docker Compose') {
+            steps {
+                sh '''
+                    set -eu
+
+                    docker compose config --quiet
+
+                    echo "Docker Compose validado."
+                '''
+            }
+        }
+
+        stage('Construir Imagem Docker') {
+            steps {
+                sh '''
+                    set -eu
+
+                    docker compose build
+
+                    echo "Imagem Docker construída."
+                '''
+            }
+        }
+
+        stage('Deploy Docker') {
+            steps {
+                sh '''
+                    set -eu
+
+                    docker compose up -d --no-build \
+                        --force-recreate
+
+                    echo "Deploy executado."
+                '''
+            }
+        }
+
+        stage('Verificar Container') {
+            steps {
+                sh '''
+                    set -eu
+
+                    echo "Verificando container..."
+
+                    sleep 10
+
+                    RUNNING=$(docker inspect \
+                        --format '{{.State.Running}}' \
+                        "$APP_NAME")
+
+                    if [ "$RUNNING" != "true" ]; then
+                        echo "ERRO: Container não está rodando."
+
+                        docker compose logs --tail=50 \
+                            "$APP_NAME" || true
+
+                        exit 1
+                    fi
+
+                    echo "Container em execução."
+                    docker compose ps
+
+                    echo "Versão do Node.js no container:"
+                    docker exec "$APP_NAME" node -v
+                '''
+            }
+        }
+    }
+
+    post {
+
+        success {
+            echo '''
+            ====================================
+             HEMOVIDA GATEWAY
+             DEPLOY EXECUTADO COM SUCESSO
+             PORTA: 7501
+            ====================================
+            '''
+        }
+
+        failure {
+            echo '''
+            ====================================
+             HEMOVIDA GATEWAY
+             FALHA NA EXECUÇÃO DO PIPELINE
+            ====================================
+            '''
+        }
+
+    }
+}
