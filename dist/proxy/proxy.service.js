@@ -24,7 +24,7 @@ let ProxyService = ProxyService_1 = class ProxyService {
         return async (req, res) => {
             const destino = new URL(req.originalUrl, urlBase).toString();
             const cabecalhos = {};
-            for (const nome of ['authorization', 'content-type', 'content-length', 'accept']) {
+            for (const nome of ['authorization', 'content-type', 'content-length', 'accept', 'x-gestor-id']) {
                 const valor = req.headers[nome];
                 if (typeof valor === 'string')
                     cabecalhos[nome] = valor;

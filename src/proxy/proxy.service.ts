@@ -16,9 +16,9 @@ export class ProxyService {
       // originalUrl guarda o caminho COMPLETO (/doadores/1?page=2), com a query string.
       const destino = new URL(req.originalUrl, urlBase).toString();
 
-      // Só repassamos o que o serviço precisa. O Authorization vai exatamente como chegou.
+      // Só repassamos o que os serviços precisam. O Authorization vai exatamente como chegou.
       const cabecalhos: Record<string, string> = {};
-      for (const nome of ['authorization', 'content-type', 'content-length', 'accept']) {
+      for (const nome of ['authorization', 'content-type', 'content-length', 'accept', 'x-gestor-id']) {
         const valor = req.headers[nome];
         if (typeof valor === 'string') cabecalhos[nome] = valor;
       }
