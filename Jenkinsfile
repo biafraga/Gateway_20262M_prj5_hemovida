@@ -29,7 +29,7 @@ pipeline {
             steps {
                 withCredentials([
                     string(
-                        credentialsId: 'tokenbeatrizhemovida',
+                        credentialsId: 'tokengatewayhemovida',
                         variable: 'INFISICAL_TOKEN'
                     )
                 ]) {
