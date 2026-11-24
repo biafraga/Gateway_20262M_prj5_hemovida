@@ -6,6 +6,8 @@ export interface Rota {
 }
 
 export const ROTAS: Rota[] = [
+  { prefixo: '/auth', destinoEnv: 'MS4_URL' }, // MS4 Usuários (login)
+  { prefixo: '/usuarios', destinoEnv: 'MS4_URL' }, // MS4 Usuários (gestão)
   { prefixo: '/doadores', destinoEnv: 'MS1_URL' }, // MS1 Doadores
   { prefixo: '/estoque', destinoEnv: 'MS2_URL' }, // MS2 Estoque
   { prefixo: '/transacoes', destinoEnv: 'MS2_URL' }, // MS2 Estoque (transações)

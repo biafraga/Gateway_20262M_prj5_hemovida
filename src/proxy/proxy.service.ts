@@ -3,48 +3,67 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { firstValueFrom } from 'rxjs';
 
+// Só esses cabeçalhos do cliente seguem para os serviços.
+// O Authorization vai sem alteração: cada serviço confere o token sozinho.
+const CABECALHOS_ENVIADOS = [
+  'authorization',
+  'content-type',
+  'content-length',
+  'accept',
+];
+
 @Injectable()
 export class ProxyService {
   private readonly logger = new Logger(ProxyService.name);
 
   constructor(private readonly http: HttpService) {}
 
-  // Devolve uma função que recebe o pedido do front, repassa para o serviço de destino
-  // e devolve a resposta dele. Nada é alterado no caminho: nem corpo, nem status.
   criarEncaminhador(urlBase: string) {
     return async (req: Request, res: Response): Promise<void> => {
-      // originalUrl guarda o caminho COMPLETO (/doadores/1?page=2), com a query string.
-      const destino = new URL(req.originalUrl, urlBase).toString();
+      const url = new URL(req.originalUrl, urlBase);
 
-      // Só repassamos o que os serviços precisam. O Authorization vai exatamente como chegou.
-      const cabecalhos: Record<string, string> = {};
-      for (const nome of ['authorization', 'content-type', 'content-length', 'accept', 'x-gestor-id']) {
+      const headers: Record<string, string> = {};
+      for (const nome of CABECALHOS_ENVIADOS) {
         const valor = req.headers[nome];
-        if (typeof valor === 'string') cabecalhos[nome] = valor;
+        if (typeof valor === 'string') {
+          headers[nome] = valor;
+        }
       }
 
-      const temCorpo = !['GET', 'HEAD'].includes(req.method);
+      // Repassa o IP de quem chamou, para o limite de tentativas de login
+      // do MS4 contar por pessoa e não pelo IP do gateway.
+      const ipCliente = req.socket.remoteAddress ?? '';
+      const anterior = req.headers['x-forwarded-for'];
+      headers['x-forwarded-for'] =
+        typeof anterior === 'string' && anterior.length > 0
+          ? `${anterior}, ${ipCliente}`
+          : ipCliente;
+
+      const temCorpo = req.method !== 'GET' && req.method !== 'HEAD';
 
       try {
         const resposta = await firstValueFrom(
           this.http.request({
-            url: destino,
             method: req.method,
-            headers: cabecalhos,
-            data: temCorpo ? req : undefined, // o corpo segue como veio (stream)
+            url: url.toString(),
+            headers,
+            data: temCorpo ? req : undefined,
             responseType: 'stream',
-            validateStatus: () => true, // 400, 401, 404, 409... NÃO são erro para o gateway
-            maxRedirects: 0, // se o serviço mandar um 301/302, repassamos sem seguir
+            validateStatus: () => true,
+            maxRedirects: 0,
           }),
         );
 
         res.status(resposta.status);
         const tipo = resposta.headers['content-type'];
-        if (typeof tipo === 'string') res.set('content-type', tipo);
-        (resposta.data as NodeJS.ReadableStream).pipe(res);
+        if (typeof tipo === 'string') {
+          res.setHeader('content-type', tipo);
+        }
+        resposta.data.pipe(res);
       } catch (erro) {
-        // Só cai aqui se o serviço não respondeu (desligado, fora do ar, rede).
-        this.logger.error(`Falha ao acessar ${urlBase}: ${(erro as Error).message}`);
+        this.logger.error(
+          `Falha ao acessar ${url.toString()}: ${(erro as Error).message}`,
+        );
         if (!res.headersSent) {
           res.status(502).json({ erro: 'Serviço de destino indisponível.' });
         }
