@@ -29,6 +29,20 @@ async function bootstrap(): Promise<void> {
     res.status(404).json({ erro: 'Rota não encontrada.' });
   });
 
+  // Saúde do MS1 pelo gateway: GET /ms1/health -> MS1_URL/health.
+  // Só esse método e esse caminho exatos. A query string é mantida.
+  const saudeMs1 = proxy.criarEncaminhador(
+    config.getOrThrow<string>('MS1_URL'),
+    '/health',
+  );
+  app.use('/ms1/health', (req: Request, res: Response, next: NextFunction) => {
+    if (req.method === 'GET' && req.path === '/') {
+      void saudeMs1(req, res);
+      return;
+    }
+    next();
+  });
+
   // Limite de cadastros: vale só para POST /doadores.
   const limitarCadastro = rateLimit({
     windowMs: CADASTRO_JANELA_MS,

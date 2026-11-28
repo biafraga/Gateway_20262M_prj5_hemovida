@@ -18,9 +18,13 @@ export class ProxyService {
 
   constructor(private readonly http: HttpService) {}
 
-  criarEncaminhador(urlBase: string) {
+  // caminhoFixo (opcional): se informado, o pedido vai para esse caminho no
+  // destino, em vez do caminho original. A query string é sempre mantida.
+  criarEncaminhador(urlBase: string, caminhoFixo?: string) {
     return async (req: Request, res: Response): Promise<void> => {
-      const url = new URL(req.originalUrl, urlBase);
+      const origem = new URL(req.originalUrl, 'http://gateway.local');
+      const url = new URL(caminhoFixo ?? origem.pathname, urlBase);
+      url.search = origem.search;
 
       const headers: Record<string, string> = {};
       for (const nome of CABECALHOS_ENVIADOS) {
